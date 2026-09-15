@@ -1,0 +1,6 @@
+customtkinter
+pysrt
+faster-whisper
+transformers
+sentencepiece
+protobuf

@@ -1,0 +1,26 @@
+# Outputs & User Media
+Output_Files/
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.mp4
+*.mkv
+*.webm
+*.avi
+*.mov
+*.srt
+
+# System & Local DBs
+tasks.db
+*.db
+*.sqlite3
+
+# Python & Caching
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+env/
