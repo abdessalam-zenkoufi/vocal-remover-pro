@@ -4,3 +4,5 @@ faster-whisper
 transformers
 sentencepiece
 protobuf
+demucs
+soundfile

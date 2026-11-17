@@ -1,5 +1,7 @@
 import os
 import sys
+import re
+import shutil
 import subprocess
 import threading
 import gc
@@ -56,6 +58,12 @@ class AudioSeparatorEngine:
             logger_callback("❌ Error: File not found!")
             return False
 
+        # --- FIX: تنظيف وتقصير اسم الملف لتجنب حد 260 حرف في ويندوز ---
+        clean_stem = re.sub(r'[^\w\s-]', '', input_path.stem).strip()
+        clean_stem = re.sub(r'[-\s]+', '_', clean_stem)[:40]
+        if not clean_stem:
+            clean_stem = "processed_media"
+
         logger_callback(f"⏳ Starting Professional Pipeline for: {input_path.name}...")
         
         env = os.environ.copy()
@@ -63,7 +71,13 @@ class AudioSeparatorEngine:
         env["PYTHONIOENCODING"] = "utf-8"
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
 
-        result_folder = self.output_dir / "htdemucs" / input_path.stem
+        result_folder = self.output_dir / "htdemucs" / clean_stem
+        result_folder.mkdir(parents=True, exist_ok=True)
+        
+        # إنشاء نسخة مؤقتة باسم نظيف وقصير لكي يعالجها demucs دون مشاكل مسارات
+        temp_input = result_folder / f"{clean_stem}{input_path.suffix}"
+        shutil.copy2(input_path, temp_input)
+
         vocals_audio = result_folder / "vocals.wav"
         music_audio = result_folder / "no_vocals.wav"
         
@@ -73,22 +87,26 @@ class AudioSeparatorEngine:
         # STEP 1: DEMUCS AUDIO SEPARATION
         # ==========================================
         logger_callback("🎵 STEP 1/4: Running Demucs AI Audio Separation (Please wait)...")
-        command = ["demucs", "--name", "htdemucs", "--out", str(self.output_dir), "--two-stems", "vocals", str(input_path)]
+        command = ["demucs", "--name", "htdemucs", "--out", str(self.output_dir), "--two-stems", "vocals", str(temp_input)]
         
         try:
             process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", creationflags=creationflags, env=env)
+            if temp_input.exists():
+                temp_input.unlink()
             if process.returncode != 0:
                 logger_callback(f"❌ Demucs Error: {process.stderr}")
                 return False
             logger_callback("✅ AI Audio Separation completed successfully!")
         except Exception as e:
+            if temp_input.exists():
+                temp_input.unlink()
             logger_callback(f"❌ Execution error during separation: {str(e)}")
             return False
 
         # ==========================================
         # STEP 2: FASTER-WHISPER TRANSCRIPTION
         # ==========================================
-        original_srt_path = result_folder / f"{input_path.stem}_original.srt"
+        original_srt_path = result_folder / f"{clean_stem}_original.srt"
         
         if "Subtitles" in mode:
             from faster_whisper import WhisperModel
@@ -134,7 +152,7 @@ class AudioSeparatorEngine:
         # ==========================================
         # STEP 3: NLLB META TRANSLATION
         # ==========================================
-        translated_srt_path = result_folder / f"{input_path.stem}_{target_lang}.srt"
+        translated_srt_path = result_folder / f"{clean_stem}_{target_lang}.srt"
         
         if "Translation" in mode and original_srt_path.exists():
             logger_callback(f"🌐 STEP 3/4: Loading Meta NLLB Neural Core for [{target_lang}]...")
